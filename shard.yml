@@ -1,0 +1,9 @@
+name: cradix
+version: 1.0.0
+
+authors:
+  - globoplox <globoplox@gmail.com>
+
+crystal: '>= 1.11.2'
+
+license: MIT
