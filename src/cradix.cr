@@ -13,7 +13,8 @@ class Cradix(Payload)
 
   @payload : Payload?
   @children : Hash(String, Cradix(Payload))?
-  @wildcards : Hash(String, Cradix(Payload))?
+  @path_parameters : Hash(String, Cradix(Payload))?
+  @wildcrad : Payload?
   
   # Add an entry to the tree.
   # *path* is expected to be an url path, with optional placeholders prefixed with ':'.
@@ -28,20 +29,22 @@ class Cradix(Payload)
       @payload = payload
     else
       word = words.shift
-      if word.starts_with? ':'
-        map = @wildcards ||= {} of String => Cradix(Payload)
+      if word == "*"
+        @wildcard = payload
+      elsif word.starts_with? ':'
+        map = @path_parameters ||= {} of String => Cradix(Payload)
         node = map[word.lstrip ':'] ||= Cradix(Payload).new
       else
         map = @children ||= {} of String => Cradix(Payload)
         node = map[word] ||= Cradix(Payload).new
       end
-      node.add words, payload
+      node.add words, payload if node
     end
   end
   
   # Search the tree for matching elements.
   # Returns an array of payloads and extracted url parameters.
-  # there might be multiple results when wildcards are involved. 
+  # there might be multiple results when path parameters are involved. 
   # The non wildcard match always appear first in the results if there is one.
   # Example:
   # ```
@@ -53,8 +56,8 @@ class Cradix(Payload)
   #                                     {"B", {"id" => "toto"}},
   #                                     {"C", {"blib" => "user", "blob" => "toto"}}]
   # ```
-  def search(path : String) : Array({Payload, Hash(String, String)})
-    results = [] of {Payload, Hash(String, String)}
+  def search(path : String) : Array({Payload, Hash(String, String), String?})
+    results = [] of {Payload, Hash(String, String), String?}
     search results, path.split '/', remove_empty: true
     results
   end
@@ -64,14 +67,18 @@ class Cradix(Payload)
   protected def search(results, path, parameters = {} of String => String, index = 0)
     if index >= path.size
       @payload.try do |payload|  
-        results.push({payload, parameters})
+        results.push({payload, parameters, nil})
       end
     else
       word = path[index]
       @children.try &.[word]?.try &.search results, path, parameters, index + 1
       
-      @wildcards.try &.each do |(name, node)|
+      @path_parameters.try &.each do |(name, node)|
         node.search results, path, parameters.dup.tap(&.[name] = word), index + 1
+      end
+
+      @wildcard.try do |payload|
+        results.push({payload, parameters, "/#{path[index..].join '/'}"})
       end
     end
   end
